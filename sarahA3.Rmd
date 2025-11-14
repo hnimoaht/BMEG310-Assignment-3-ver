@@ -369,9 +369,11 @@ vaf_gt5 <- sum(vafs > 0.05, na.rm = TRUE)
 coding_pattern <- "missense_variant|synonymous_variant|frameshift|stop_gained|start_lost|inframe"
 coding_variants <- grepl(coding_pattern, variants$INFO)
 vaf_gt5_coding <- sum(vafs > 0.05 & coding_variants, na.rm = TRUE)
-
 vaf_gt5
 vaf_gt5_coding
+
+```
+```{r}
 
 ```
 
