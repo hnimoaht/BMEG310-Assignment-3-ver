@@ -1,0 +1,378 @@
+---
+title: "Sarah"
+author: "Sarah Dumont"
+date: "2025-11-14"
+output: html_document
+---
+
+---
+title: "new_as_3"
+author: "Sarah Dumont"
+date: "2025-11-4"
+output: html_document
+---
+
+
+
+Q1. Sequencing technologies
+Why areas of the genome with high GC content are hard to sequence?
+
+Regions of the genome with high GC content are difficult to sequence because GC base pairs form three hydrogen bonds, making the DNA more stable and harder to separate during the denaturation steps required for sequencing.
+
+Q2. Global alignment exercise
+done on paper
+
+
+
+
+Q3. Looking at the Metadata of an alignment (SAM) file
+
+```{r}
+data <- read.csv("single_cell_RNA_seq_bam.sam", nrows=73, sep="\t", header=FALSE,
+fill=TRUE)
+
+head(data)
+```
+SN - Reference sequence name
+LN - Reference sequence length
+
+
+Q3.2
+```{r}
+fnd_x <- data[data$V2 == "SN:X", ]
+LN <- fnd_x$V3
+
+remove_LN <- gsub("LN:", "", LN)
+print(remove_LN)
+```
+
+Q4. Looking at the Reads of an alignment (SAM) file
+
+
+```{r}
+sam <- read.csv("single_cell_RNA_seq_bam.sam", sep="\t", header=FALSE,
+comment.char="@", col.names = paste0("V",seq_len(30)), fill=TRUE)
+sam <- sam[paste0("V",seq_len(11))]
+```
+
+4.1
+```{r}
+sam
+read_num <- nrow(sam)
+read_num
+```
+Q4.2
+```{r}
+
+load_10 <- sam[10 ,]
+chrom <- load_10$V3
+
+chrom
+```
+
+The dataframe column V11 corresponds to the QUAL field, which contains the base quality scores
+
+4.3
+```{r}
+amount_x <- sam$V3  == "X"
+
+amount_x_L <-sum(amount_x)
+
+amount_x_L
+```
+4.4
+```{r}
+x_reads <- sam[sam$V3 == "X", ]
+BQ_X <- unlist(
+  lapply(x_reads$V11, function(q) utf8ToInt(q) - 33)
+)
+
+mean_BQ_X <- mean(BQ_X)
+mean_BQ_X
+```
+
+
+
+4.5
+```{r}
+# Group by chromosome and plot base quality distributions
+bq_list <- lapply(unique(sam$V3), function(chr) {
+  reads_chr <- sam[sam$V3 == chr, "V11"]
+  phred_scores <- unlist(lapply(reads_chr, function(q) utf8ToInt(q) - 33))
+  return(phred_scores)
+})
+names(bq_list) <- unique(sam$V3)
+```
+
+
+```{r}
+boxplot(bq_list,
+        las = 2,                  # rotate chromosome labels
+        col = "skyblue",
+        border = "navy",
+        main = "Base Quality Distribution by Chromosome",
+        xlab = "Chromosome (V3)",
+        ylab = "Base Quality (Phred Score)")
+```
+
+
+Q4.6 - 4
+
+
+4.7
+```{r}
+
+start <- 40801273
+end  <- 40805199
+
+count <- sum(sam$V3 == 9 & sam$V4 >= start & sam$V4 <= end)
+
+count
+
+```
+4.8
+```{r}
+qualty <-sam$V5
+
+low_50 <- sum(qualty < 50)
+low_50
+```
+
+Q 4.9
+```{r}
+
+result <-sam[qualty< 50, ]
+mean_low <- mean(result$V5)
+mean_low
+```
+
+```{r}
+vcf_con <- file("RNA_seq_annotated_variants.vcf", open="r")
+vcf_file <- readLines(vcf_con)
+close(vcf_con)
+vcf <- data.frame(vcf_file)
+header <- vcf[grepl("##", vcf$vcf_file), ]
+#factor(header)
+variants <- read.csv("RNA_seq_annotated_variants.vcf", skip=length(header),
+header=TRUE, sep="\t")
+
+``` 
+Q 5.1 
+```{r}
+
+ref <- variants$REF[1]
+alt <- variants$ALT[1]
+
+ref
+alt
+
+```
+5.2
+```{r}
+
+info <- as.character(variants$INFO[1])
+info
+
+split <- strsplit(info, ";")[[1]]
+
+ann <- split[grepl("^ANN=", split)]
+
+value <- sub("^ANN=", "", ann)
+
+value
+
+```
+5.3
+
+```{r}
+
+ann_value <- sub("^ANN=", "", strsplit(info, ";")[[1]][grepl("^ANN=", strsplit(info, ";")[[1]])])
+
+first_ann <- strsplit(ann_value, ",")[[1]][1]
+
+annotation_field <- strsplit(first_ann, "\\|")[[1]][2]
+
+annotation_field
+
+```
+5.4
+
+```{r}
+
+info_field_683 <- as.character(variants$INFO[683])
+info_split_683 <- strsplit(info_field_683, ";")[[1]]
+ann_entry_683 <- info_split_683[grepl("^ANN=", info_split_683)]
+ann_value_683 <- sub("^ANN=", "", ann_entry_683)
+
+
+ann_entries_683 <- strsplit(ann_value_683, ",")[[1]]
+first_ann_683 <- ann_entries_683[1]
+first_ann_split_683 <- strsplit(first_ann_683, "\\|")[[1]]
+
+# 4th field - Gene name
+gene_name_683 <- first_ann_split_683[4]
+
+gene_name_683
+
+```
+
+Q5.5
+
+```{r}
+get_ann_annotation <- function(info_string) {
+  split <- strsplit(info_string, ";")[[1]]
+  
+  ann_line <- split[grepl("^ANN=", split)]
+  if (length(ann_line) == 0) return(NA)
+  
+  ann_value <- sub("^ANN=", "", ann_line)
+  
+  # take the first (most confident) annotation
+  first_entry <- strsplit(ann_value, ",")[[1]][1]
+  
+  fields <- strsplit(first_entry, "\\|")[[1]]
+  
+  if (length(fields) < 2) return(NA)
+  
+  return(fields[2])
+}
+
+all_annotations <- sapply(variants$INFO, get_ann_annotation)
+variant_counts <- table(all_annotations)
+
+counteach <- sum(variant_counts)
+
+counteach
+```
+Q5.6
+
+Frame shift is a variant that inserts or deletes nucleotides instead of codons. This causes a greater effect on resultant proteins because instead of having a codon removed, it may remove only one nucleotide, and because nucleotides are read in 3-codon frames, this has a downstream effect on subsequent nucleotides.  It usually causes a truncated or nonfunctional protein. This generally has a greater effect than a missense variant, which changes only a single amino acid, not the whole protein.
+
+
+Q5.7
+
+```{r}
+
+intronic_variants <- sum(grepl("intron", variants$INFO))
+intergenic_variants <- sum(grepl("intergenic", variants$INFO))
+
+
+total_in <- sum(intronic_variants,intergenic_variants)
+
+frac_n <- total_in/counteach
+frac_n
+
+```
+most of the variants are intronic
+
+Q5.8
+```{r}
+get_high_moderate_coding_genes <- function(info_field) {
+  ann_entry <- strsplit(as.character(info_field), ";")[[1]]
+  ann_value <- ann_entry[grepl("^ANN=", ann_entry)]
+  if(length(ann_value) == 0) return(NULL)
+  ann_value <- sub("^ANN=", "", ann_value)
+  
+  ann_entries <- strsplit(ann_value, ",")[[1]]
+  genes <- c()
+  genes_H <- c()
+  
+  for(entry in ann_entries) {
+    fields <- strsplit(entry, "\\|")[[1]]
+    if(length(fields) >= 8) {
+      impact <- fields[3]
+      gene_name <- fields[4]
+      bio_type <- fields[8]  # Correct field for protein_coding
+      
+      if(impact %in% c("HIGH", "MODERATE") & grepl("protein_coding", bio_type, ignore.case = TRUE)) {
+        genes <- c(genes, gene_name)
+      }
+            if(impact %in% c("HIGH") & grepl("protein_coding", bio_type, ignore.case = TRUE)) {
+        genes_H <- c(genes_H, gene_name)
+      }
+    }
+  }
+  unique(genes)
+  unique(genes_H) # now onyl returns nunque hgh remove ths part to get both modarte and hgh
+}
+
+high_moderate_genes <- unique(unlist(sapply(variants$INFO, get_high_moderate_coding_genes)))
+high_moderate_genes
+
+
+
+
+```
+
+```{r}
+# Correcton just Hgh Genes 
+```
+
+
+
+5.10
+
+```{r}
+
+get_vaf <- function(format_field, sample_field) {
+  format_parts <- strsplit(format_field, ":")[[1]]
+  sample_parts <- strsplit(sample_field, ":")[[1]]
+  names(sample_parts) <- format_parts
+
+  if("AD" %in% names(sample_parts)) {
+    ad_values <- as.numeric(strsplit(sample_parts["AD"], ",")[[1]])
+    vaf <- ad_values[2] / sum(ad_values)  # alt / (ref+alt)
+    return(vaf)
+  } else {
+    return(NA)
+  }
+}
+
+vafs <- mapply(get_vaf, variants$FORMAT, variants[,10])
+
+get_annotation <- function(info) {
+  ann <- unlist(strsplit(info, ";"))[grepl("^ANN=", unlist(strsplit(info, ";")))]
+  ann <- sub("^ANN=", "", ann)
+  first_ann <- strsplit(ann, ",")[[1]][1]
+  fields <- strsplit(first_ann, "\\|")[[1]]
+  return(fields[2])  # Annotation type
+}
+
+all_annotations <- sapply(variants$INFO, get_annotation)
+
+vaf_list <- split(vafs, all_annotations)
+
+variant_names <- names(vaf_list)
+abbr <- substr(variant_names, 1, 6) 
+names(vaf_list) <- abbr
+
+# Plot boxplot
+par(mar = c(10, 4, 2, 2))  
+boxplot(vaf_list,
+        las = 2,             
+        cex.axis = 0.8,      
+        col = "lightblue",
+        main = "VAF per Variant",
+        xlab = "Variant",
+        ylab = "Variant Allele Frequency")
+
+#library(knitr)
+abbr_table <- data.frame(
+  Abbreviation = abbr,
+  Full_Name = variant_names
+)
+kable(abbr_table, caption = "Variant Name Abbreviations")
+
+vaf_gt5 <- sum(vafs > 0.05, na.rm = TRUE)
+
+
+coding_pattern <- "missense_variant|synonymous_variant|frameshift|stop_gained|start_lost|inframe"
+coding_variants <- grepl(coding_pattern, variants$INFO)
+vaf_gt5_coding <- sum(vafs > 0.05 & coding_variants, na.rm = TRUE)
+
+vaf_gt5
+vaf_gt5_coding
+
+```
+
+
