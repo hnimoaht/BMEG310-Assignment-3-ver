@@ -196,6 +196,8 @@ sam <- read.csv(
 sam <- sam[paste0("V", seq_len(11))]
 
 head(sam)
+
+unique(sam$V1)
 ```
 
 ## 4.1
