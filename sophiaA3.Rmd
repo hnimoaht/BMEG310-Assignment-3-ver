@@ -1,0 +1,454 @@
+---
+title: "SL-assignment3"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Sophia Liau
+
+# Question 1
+
+Regions with a higher GC content are harder to sequence due to the DNA's stability. As GC pairs form three hydrogen bonds (compared to AT's two hydrogen bonds), it makes such segments more thermally stable. This promotes secondary structures, such as hairpins, which make denaturing more difficult during PCR. This also affects cluster generation. As a result, polymerases have more difficulty with "copy pasting" these regions, which leads to bias in the data, including uneven amplification and reduced coverage in high-GC segments compared to balanced or even high-AT regions. Overall, GC-rich sections are often underrepresented, have lower quality scores or sometimes drop out in sequencing data.
+
+# Question 2
+
+Following the following algorithm: 
+
+  diag = F[i-1, j-1] + (match or mismatch)
+  
+  up   = F[i-1, j]   + gap
+  
+  left = F[i, j-1]   + gap
+
+  F[i,j] = max(diag, up, left)
+
+We can make the first dynamic programming matrix with the first row and first column using the gap penalty. This would yield the top 3 x 3 as follows:
+
+\[
+\begin{array}{c|ccc}
+   & - & A & T \\
+\hline
+ - & 0 & -2 & -4 \\
+ A & -2 & 2 & 0 \\
+ T & -4 & 0 & 4 \\
+\end{array}
+\]
+
+This would then yield us the entire matrix as follows:
+
+\[
+\begin{array}{c|cccccc}
+   & - & A & T & C & A & C \\
+\hline
+ - & 0 & -2 & -4 & -6 & -8 & -10 \\
+ A & -2 & 2 & 0 & -2 & -4 & -6 \\
+ T & -4 & 0 & 4 & 2 & 0 & -2 \\
+ T & -6 & -2 & 2 & 3 & 1 & -1 \\
+ C & -8 & -4 & 0 & 4 & 2 & 3 \\
+ G & -10 & -6 & -2 & 2 & 3 & 1 \\
+ A & -12 & -8 & -4 & 0 & 4 & 2 \\
+ C & -14 & -10 & -6 & -2 & 2 & 6 \\
+\end{array}
+\]
+
+Following the arrows from the bottom right cell, we obtain ATTCGAC and A-TC-AC with an alignment score of 6.
+
+# Question 2 - Individual Bonus
+
+```{r}
+## Q2: Global alignment in R (Needleman–Wunsch)
+## Sequences: ATTCGAC and ATCAC
+## Scores: match = +2, mismatch = -1, gap = -2
+
+needleman_wunsch <- function(seq1, seq2, match = 2, mismatch = -1, gap = -2) {
+  # split into characters
+  s1 <- strsplit(seq1, "")[[1]]
+  s2 <- strsplit(seq2, "")[[1]]
+  n <- length(s1)
+  m <- length(s2)
+  
+  # score helper
+  score_pair <- function(a, b) {
+    if (a == b) match else mismatch
+  }
+  
+  # DP matrix
+  F <- matrix(0, nrow = n + 1, ncol = m + 1)
+  rownames(F) <- c("-", s1)
+  colnames(F) <- c("-", s2)
+  
+  # initialization
+  for (i in 1:n) {
+    F[i + 1, 1] <- F[i, 1] + gap
+  }
+  for (j in 1:m) {
+    F[1, j + 1] <- F[1, j] + gap
+  }
+  
+  # fill matrix
+  for (i in 1:n) {
+    for (j in 1:m) {
+      diag_score <- F[i, j] + score_pair(s1[i], s2[j])
+      up_score   <- F[i, j + 1] + gap      # gap in seq2
+      left_score <- F[i + 1, j] + gap      # gap in seq1
+      F[i + 1, j + 1] <- max(diag_score, up_score, left_score)
+    }
+  }
+  
+  # traceback to get alignment
+  i <- n
+  j <- m
+  align1 <- ""
+  align2 <- ""
+  
+  while (i > 0 || j > 0) {
+    current <- F[i + 1, j + 1]
+    
+    # candidate scores from predecessors
+    diag_score <- if (i > 0 && j > 0) F[i, j] + score_pair(s1[i], s2[j]) else -Inf
+    up_score   <- if (i > 0)          F[i, j + 1] + gap                     else -Inf
+    left_score <- if (j > 0)          F[i + 1, j] + gap                     else -Inf
+    
+    if (current == diag_score) {
+      align1 <- paste0(s1[i], align1)
+      align2 <- paste0(s2[j], align2)
+      i <- i - 1
+      j <- j - 1
+    } else if (current == up_score) {
+      align1 <- paste0(s1[i], align1)
+      align2 <- paste0("-", align2)
+      i <- i - 1
+    } else {
+      align1 <- paste0("-", align1)
+      align2 <- paste0(s2[j], align2)
+      j <- j - 1
+    }
+  }
+  
+  list(
+    score_matrix = F,
+    alignment_seq1 = align1,
+    alignment_seq2 = align2,
+    final_score = F[n + 1, m + 1]
+  )
+}
+
+## Run it for Q2:
+res_q2 <- needleman_wunsch("ATTCGAC", "ATCAC",
+                           match = 2, mismatch = -1, gap = -2)
+
+# Print the DP matrix
+res_q2$score_matrix
+
+# Print alignment and final score
+res_q2$alignment_seq1
+res_q2$alignment_seq2
+res_q2$final_score
+
+```
+# Question 3
+
+## 3.1
+
+```{r}
+sam_header <- read.csv(
+  "single_cell_RNA_seq_bam.sam",
+  nrows = 73,
+  sep = "\t",
+  header = FALSE,
+  fill = TRUE
+)
+
+sam_header
+
+```
+
+SN signifies Sequence Name. This is the identifier of the reference sequence.
+
+LN is the Sequence Length. This is the length of the reference sequence in bp.
+
+## 3.2
+```{r}
+# Using the header we already loaded in Q3.1
+x_row <- sam_header[sam_header$V2 == "SN:X", ]
+x_row
+
+x_len_str <- x_row$V3           # "LN:171031299"
+x_len_bp  <- as.numeric(sub("LN:", "", x_len_str))
+x_len_bp
+```
+
+# Question 4
+
+## Set Up
+```{r}
+sam <- read.csv(
+  "single_cell_RNA_seq_bam.sam",
+  sep = "\t",
+  header = FALSE,
+  comment.char = "@",
+  col.names = paste0("V", seq_len(30)),
+  fill = TRUE
+)
+
+# Only keep first 11 fields (SAM spec)
+sam <- sam[paste0("V", seq_len(11))]
+
+head(sam)
+```
+
+## 4.1
+
+```{r}
+unique_flags <- unique(sam$V2)
+unique_flags
+```
+
+The SAM file has reads with FLAGs including 0, 4, 16, 256, 272, 1024 and 1040.
+
+FLAG 0 indicates a read that is aligned in the forward direction.
+FLAG 4 means read is unmapped.
+FLAG 16 means alignment on the reverse complement strand. 
+FLAG 256 denotes a secondary alignment, i.e. it has multiple genomic locations.
+FLAG 1024 is PCR/optical duplicate.
+
+FLAG 1040 breaks down into the binaries of 1024 and 16.
+FLAG 272 breaks down into 256 + 16.
+
+## 4.2
+```{r}
+unique_mapq <- unique(sam$V5)
+unique_mapq
+```
+
+The SAM file has MAPQ values of 255, 0, 1 and 3.
+
+MAPQ 255 means unknown or non applicable. This means teh aligner is not providing a score.
+The range of MAPQ 0-10 indicates low mapping confidence, with MAPQ 3 being marginally more informative than MAPQ 0.
+
+# Question 5
+
+## loading vcf
+```{r}
+## Question 5 – load VCF
+
+# read all lines as plain text first
+vcf_lines <- readLines("RNA_seq_annotated_variants.vcf")
+
+# how many lines start with "##" (meta-header)
+num_meta <- sum(grepl("^##", vcf_lines))
+
+# now read the actual variant table
+variants <- read.csv(
+  "RNA_seq_annotated_variants.vcf",
+  skip   = num_meta,      # this is now a single integer
+  header = TRUE,
+  sep    = "\t",
+  stringsAsFactors = FALSE
+)
+
+head(variants)
+```
+## 5.1
+```{r}
+# Q5.1: first varient: REF & ALT
+first_ref <- variants$REF[1]
+first_alt <- variants$ALT[1]
+
+first_ref
+first_alt
+```
+
+The ref allele is G and alternative is A.
+
+## 5.2
+```{r}
+# Q5.2: extract ANN for first variant
+info1      <- as.character(variants$INFO[1])
+info_parts <- strsplit(info1, ";")[[1]]
+
+ann_tag    <- info_parts[grepl("^ANN=", info_parts)]
+ann_value  <- sub("^ANN=", "", ann_tag)
+
+ann_value
+```
+
+
+## 5.3
+```{r}
+# Q5.3: parse the first ANN entry
+ann_fields <- strsplit(ann_value, "\\|")[[1]]
+
+annotation        <- ann_fields[2]  # "intron_variant"
+annotation_impact <- ann_fields[3]  # "MODIFIER"
+gene_name         <- ann_fields[4]  # "Sulf1"
+
+annotation
+annotation_impact
+gene_name
+```
+
+The Annotation field is intron_variant meaning the variation lies in an intron of the gene Sulf1 and does not directly change the coding sequence.
+
+## 5.4
+```{r}
+# Q5.4: parse ANN for variant 683
+info_683      <- as.character(variants$INFO[683])
+info_parts_683 <- strsplit(info_683, ";")[[1]]
+
+ann_tag_683   <- info_parts_683[grepl("^ANN=", info_parts_683)]
+ann_value_683 <- sub("^ANN=", "", ann_tag_683)
+
+ann_fields_683 <- strsplit(ann_value_683, "\\|")[[1]]
+gene_683       <- ann_fields_683[4]  # Gene_Name position
+
+gene_683
+```
+
+## 5.5
+```{r}
+# Q5.5: count HIGH-impact variants
+
+info_vec <- as.character(variants$INFO)
+
+# function to get the impact (HIGH/MODERATE/LOW/MODIFIER) for the first ANN entry
+get_impact <- function(info_str) {
+  parts <- strsplit(info_str, ";")[[1]]
+  ann_tag <- parts[grepl("^ANN=", parts)]
+  if (length(ann_tag) == 0) return(NA_character_)
+  ann_value <- sub("^ANN=", "", ann_tag)
+  
+  # keep only the first ANN (before first comma)
+  first_ann <- strsplit(ann_value, ",")[[1]][1]
+  fields    <- strsplit(first_ann, "\\|")[[1]]
+  
+  # 3rd field = Annotation_Impact
+  if (length(fields) >= 3) fields[3] else NA_character_
+}
+
+impacts <- vapply(info_vec, get_impact, character(1))
+
+table(impacts)
+high_count <- sum(impacts == "HIGH", na.rm = TRUE)
+high_count
+```
+## 5.6
+
+A frameshift variant is an insertion or deletion whose length is not a multiple of 3 nucleotides, meaning the reading frame is shifted for the coding sequence. This obviously has a ripple effect downstream of such variant and often introduces premature stop codons. Frameshift variants have a greater effect on the resultant protein than missense variants, where a single amino acid is changed, wheras a frameshift results in the entire downstream sequence to be affected. This often leads to loss of function.
+
+## 5.7
+```{r}
+# Q5.7: intronic variants
+info_vec <- as.character(variants$INFO)
+
+is_intronic <- grepl("intron_variant", info_vec)
+intronic_count <- sum(is_intronic)
+total_variants <- nrow(variants)
+
+intronic_count
+total_variants
+intronic_fraction <- intronic_count / total_variants
+intronic_fraction
+```
+
+There are 476 intronic variants out of the total 836 variants which is approx 56%. A large portion of variants fall in non coding segments (introns) due to the majority of the genome being non-coding. Purely by chance, more variants tend to occur in intronic or intergenic regions than exons.
+
+```{r}
+# helper to extract first ANN fields (split into vector)
+get_first_ann_fields <- function(info_str) {
+  parts <- strsplit(info_str, ";")[[1]]
+  ann_tag <- parts[grepl("^ANN=", parts)]
+  if (length(ann_tag) == 0) return(NA)
+  ann_value <- sub("^ANN=", "", ann_tag)
+  first_ann <- strsplit(ann_value, ",")[[1]][1]
+  fields    <- strsplit(first_ann, "\\|")[[1]]
+  fields
+}
+
+ann_list <- lapply(info_vec, get_first_ann_fields)
+
+# converting data fram of annotation per variant for first ANN
+ann_df <- do.call(rbind, lapply(ann_list, function(f) {
+  # pad to length 16 if short
+  if (length(f) < 16) f <- c(f, rep(NA, 16 - length(f)))
+  data.frame(
+    Allele      = f[1],
+    Annotation  = f[2],
+    Impact      = f[3],
+    Gene_Name   = f[4],
+    stringsAsFactors = FALSE
+  )
+}))
+
+head(ann_df)
+
+# defining what we consider coding
+coding_annots <- c(
+  "missense_variant",
+  "synonymous_variant",
+  "stop_gained",
+  "stop_lost",
+  "start_lost",
+  "frameshift_variant",
+  "inframe_insertion",
+  "inframe_deletion",
+  "splice_acceptor_variant",
+  "splice_donor_variant",
+  "coding_sequence_variant"
+)
+
+is_coding_high <- ann_df$Annotation %in% coding_annots & ann_df$Impact == "HIGH"
+
+coding_high_genes <- unique(ann_df$Gene_Name[is_coding_high])
+coding_high_genes
+length(coding_high_genes)
+
+```
+These genes printed have coding mutations with HIGH impacts. It's intresting that only a small subset of 6 genes have high impact coding variants. This is consistent with the idea that such strong changes are relatively rare and on negative selection.
+
+## 5.9
+Long insertions are hard to detect with 60 bp reads becasue the aligner can only "see" 60 bases from each fragment. Insertions longer than this read length can't be fully spanned with one read. As a result, reads with a long insertion can fail to align, or align incorrectly, leading to ambiguous mapping and short-read callers will struggle to have confidence in detection. Usually we'd need a longer read or more specialized algorithms.
+
+## 5.10
+```{r}
+# Q5.10: compute VAF
+
+format_vec <- as.character(variants$FORMAT)
+sample_vec <- as.character(variants[[ncol(variants)]])  # last column = sample
+
+get_vaf <- function(fmt, sample) {
+  fmt_fields <- strsplit(fmt, ":")[[1]]
+  samp_fields <- strsplit(sample, ":")[[1]]
+  ad_idx <- which(fmt_fields == "AD")
+  if (length(ad_idx) == 0) return(NA_real_)
+  
+  ad_str <- samp_fields[ad_idx]        # e.g. "1,2"
+  ad_vals <- as.numeric(strsplit(ad_str, ",")[[1]])
+  if (length(ad_vals) < 2) return(NA_real_)
+  
+  ref_count <- ad_vals[1]
+  alt_count <- ad_vals[2]
+  total <- ref_count + alt_count
+  if (total == 0) return(NA_real_)
+  
+  alt_count / total
+}
+
+vaf <- mapply(get_vaf, format_vec, sample_vec)
+summary(vaf)
+
+boxplot(vaf,
+        main = "Distribution of Variant Allele Frequencies (VAF)",
+        ylab = "VAF")
+
+vaf_over_5 <- vaf > 0.05
+sum(vaf_over_5, na.rm = TRUE)  # how many variants with VAF > 5%
+
+# coding vs non-coding using the ann_df we built earlier
+is_coding <- ann_df$Annotation %in% coding_annots
+
+sum(vaf_over_5 & is_coding, na.rm = TRUE)  # VAF>5% and coding
+
+```
+WE computed the VAF for each varient from the AD (allelic depth) field and plotted this distribution as a box plot. 
