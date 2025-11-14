@@ -162,7 +162,7 @@ nrow(sam)
 ```{r}
 sam[10, ]
 ```
-According to section 1.4 of the BAM documentation, we can see that to find the chromosone to which the read was aligned, we should look at column 3, which is the reference sequence name. This is the \textbf{V3} column. The V11 column correspond to \textbf{base quality scores (ASCII-encoded)}.
+According to section 1.4 of the BAM documentation, we can see that to find the chromosone to which the read was aligned, we should look at column 3, which is the reference sequence name. We can see that this is chromosome 1. This is the \textbf{V3} column. The V11 column correspond to \textbf{base quality scores (ASCII-encoded)}.
 
 4.3. The number of reads correspond to chromosome X is:
 
@@ -200,7 +200,7 @@ The base quality distribution shows a high median Phred score of around 35, indi
 
 4.6. Section 1.4 of the SAM/BAM documentation indicates V4 as the leftmost mapping position of the reads
 
-We want to find reads have their leftmost mapping position aligned within bases 40801273 - 40805199 at chromosome 9 which encode protein Hspa8.
+4.7. We want to find reads have their leftmost mapping position aligned within bases 40801273 - 40805199 at chromosome 9 which encode protein Hspa8.
 
 ```{r}
 #Filter reads from chromosome 9 and within the provided coordinates
@@ -208,24 +208,24 @@ hspa8_reads <- sam[sam$v3 == "9" & sam$v4 >= 40801273 & sam$v4 <= 40805199, ]
 nrow(hspa8_reads)
 ```
 
-4.7.  Section 1.4 of the SAM/BAM documentation indicates V5 as the mapping quality. The number of reading iwth mapping quality less than 50 is:
+4.8.  Section 1.4 of the SAM/BAM documentation indicates V5 as the mapping quality. The number of reading iwth mapping quality less than 50 is:
 
 ```{r}
 sum(sam$v5 < 50)
 ```
 
-4.8. The mean mapping quality of the reads which have mapping quality less than 50 is:
+4.9. The mean mapping quality of the reads which have mapping quality less than 50 is:
 ```{r}
 mean(sam$v5[sam$v5 < 50])
 ```
 
-4.9. The number of reads which align to the tdTomato sequence is:
+4.10. The number of reads which align to the tdTomato sequence is:
 
 ```{r}
 sum(sam$v3 == "tdTomato")
 ```
 
-We see that the cell expresses tdTomato, so it should emit fluorescence under appropriate light. Fluorophore tags can help researchers with wisually track gene expression or identify specific cell types under a microscope, separate cell populations using fluorescence.
+We see that the cell expresses tdTomato, so it should emit fluorescence under appropriate light. Fluorophore tags can help researchers with visually track gene expression or identify specific cell types under a microscope, separate cell populations using fluorescence.
 
 **Question 5**
 
@@ -332,6 +332,7 @@ We can see the variants type count in the table below:
 ```{r}
 # Count by variant type
 table(ann_all)
+sum(table(ann_all))
 ```
 
 5.6. A frameshift variant is an insertion or deletion (indel) whose length is not a multiple of 3. This shifts the triplet reading frame of the mRNA during translation and causes all downstream codons to be read incorrectly. Missense variants only change one amino acid, but a frameshift variant changes all downstream amino acids in translation, so it has a more negative effect.
@@ -377,10 +378,35 @@ ann_df <- data.frame(
 )
 ```
 
-Coding variant will have specific keywords, we want only those variants. Then we can filter out the HIGH impact coding variant
+Coding variant will have specific keywords, we want only those variants. Then we can filter out the HIGH impact coding variant. Note that we also define splice variants as coding variants despite them being on an intron. This is because it affects how the exons is joined together which ultimately allows them to have the same impact as a coding variant.
 
 ```{r}
-coding_keywords <- c("missense", "frameshift", "stop_gained", "start_lost", "inframe")
+coding_keywords <- c(
+  "missense_variant",
+  "synonymous_variant",
+  "stop_gained",
+  "stop_lost",
+  "start_lost",
+  "frameshift_variant",
+  "inframe_insertion",
+  "inframe_deletion",
+  "splice_acceptor_variant",
+  "splice_donor_variant",
+  "splice_region_variant",
+  "coding_sequence_variant"
+)
+
+coding_annots <- c(
+  "missense",
+  "stop",
+  "start",
+  "frameshift",
+  "inframe",
+  "splice",
+  "coding",
+  "synonymous"
+)
+
 high_coding <- ann_df[
   grepl("HIGH", ann_df$Impact) &
   grepl(paste(coding_keywords, collapse="|"), ann_df$Annotation),
@@ -425,21 +451,39 @@ where $x$ is the ALT reads and $y$ is the REF read.
 library(ggplot2)
 
 # Function to compute VAF
-get_vaf <- function(entry) {
-  fields <- unlist(strsplit(entry, ":"))
-  ad_field <- fields[grep(",", fields)]
-  if (length(ad_field) == 0) return(NA)
-  counts <- as.numeric(unlist(strsplit(ad_field[1], ",")))
+get_vaf <- function(entry_fmt, entry_sample) {
+
+  # Split FORMAT and sample genotype fields
+  fmt_fields  <- unlist(strsplit(entry_fmt, ":"))
+  samp_fields <- unlist(strsplit(entry_sample, ":"))
+
+  # Locate AD field by name (correct VCF spec)
+  ad_idx <- which(fmt_fields == "AD")
+  if (length(ad_idx) == 0) return(NA)
+
+  # Extract AD counts (e.g., "10,3")
+  ad_str  <- samp_fields[ad_idx]
+  counts  <- as.numeric(unlist(strsplit(ad_str, ",")))
+
+  # Must have REF, ALT
   if (length(counts) != 2) return(NA)
-  vaf <- counts[2] / sum(counts)
-  return(vaf)
+
+  ref <- counts[1]
+  alt <- counts[2]
+  total <- ref + alt
+  if (total == 0) return(NA)
+
+  # VAF = ALT / (REF + ALT)
+  alt / total
 }
 ```
 
 Next, we will apply the function get_vaf to every variants. Then we can plot the distribution of VAF.
 ```{r}
 # Apply to all variants
-vafs <- sapply(geno_field, get_vaf)
+tag_col <- variants[, ncol(variants)-1]    # FORMAT column
+geno_field <- variants[, ncol(variants)] 
+vafs <- mapply(get_vaf, tag_col, geno_field)
 
 # Boxplot of VAF distribution
 boxplot(vafs,
@@ -465,7 +509,7 @@ We will add a column with the VAF values of each variant, then use coding_keywor
 ann_df$VAF <- vafs
 
 coding_variants <- ann_df[
-  grepl(paste(coding_keywords, collapse="|"), ann_df$Annotation), ]
+  grepl(paste(coding_annots, collapse="|"), ann_df$Annotation), ]
 
 coding_vaf_above_5 <- sum(coding_variants$VAF > 0.05, na.rm = TRUE)
 coding_vaf_above_5
