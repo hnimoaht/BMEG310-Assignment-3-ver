@@ -5,14 +5,6 @@ date: "2025-11-14"
 output: html_document
 ---
 
----
-title: "new_as_3"
-author: "Sarah Dumont"
-date: "2025-11-4"
-output: html_document
----
-
-
 
 Q1. Sequencing technologies
 Why areas of the genome with high GC content are hard to sequence?
@@ -63,14 +55,15 @@ read_num
 ```
 Q4.2
 ```{r}
-
+  
 load_10 <- sam[10 ,]
+load_10
 chrom <- load_10$V3
 
 chrom
 ```
 
-The dataframe column V11 corresponds to the QUAL field, which contains the base quality scores
+The dataframe column V11 corresponds to the QUAL field, which contains the base quality scores  
 
 4.3
 ```{r}
@@ -110,8 +103,8 @@ boxplot(bq_list,
         las = 2,                  # rotate chromosome labels
         col = "skyblue",
         border = "navy",
-        main = "Base Quality Distribution by Chromosome",
-        xlab = "Chromosome (V3)",
+        main = "Base Quality Distribution",
+        xlab = " Sequence Name (V3)",
         ylab = "Base Quality (Phred Score)")
 ```
 
@@ -241,9 +234,51 @@ all_annotations <- sapply(variants$INFO, get_ann_annotation)
 variant_counts <- table(all_annotations)
 
 counteach <- sum(variant_counts)
-
+variant_counts
 counteach
 ```
+
+
+```{r}
+#defne codng vs non codng 
+coding <- c(
+  "missense_variant",
+  "synonymous_variant",
+  "stop_gained",
+  "stop_lost",
+  "start_lost",
+  "frameshift_variant",
+  "inframe_insertion",
+  "inframe_deletion",
+  "splice_acceptor_variant",
+  "splice_donor_variant",
+  "splice_region_variant",
+  "coding_sequence_variant"
+)
+
+get_ann_annotation <- function(info_string) {
+  split <- strsplit(info_string, ";")[[1]]
+  ann_line <- split[grepl("^ANN=", split)]
+  if (length(ann_line) == 0) return(NA)
+  ann_value <- sub("^ANN=", "", ann_line)
+  first_entry <- strsplit(ann_value, ",")[[1]][1]
+  fields <- strsplit(first_entry, "\\|")[[1]]
+  if (length(fields) < 2) return(NA)
+  return(fields[2])
+}
+
+# Apply extraction
+all_annotations <- sapply(variants$INFO, get_ann_annotation)
+
+# Count ONLY coding annotations
+coding_total <- sum(all_annotations %in% coding, na.rm = TRUE)
+
+coding_total
+
+```
+
+
+
 Q5.6
 
 Frame shift is a variant that inserts or deletes nucleotides instead of codons. This causes a greater effect on resultant proteins because instead of having a codon removed, it may remove only one nucleotide, and because nucleotides are read in 3-codon frames, this has a downstream effect on subsequent nucleotides.  It usually causes a truncated or nonfunctional protein. This generally has a greater effect than a missense variant, which changes only a single amino acid, not the whole protein.
@@ -356,7 +391,7 @@ boxplot(vaf_list,
         xlab = "Variant",
         ylab = "Variant Allele Frequency")
 
-#library(knitr)
+library(knitr)
 abbr_table <- data.frame(
   Abbreviation = abbr,
   Full_Name = variant_names
@@ -366,14 +401,29 @@ kable(abbr_table, caption = "Variant Name Abbreviations")
 vaf_gt5 <- sum(vafs > 0.05, na.rm = TRUE)
 
 
-coding_pattern <- "missense_variant|synonymous_variant|frameshift|stop_gained|start_lost|inframe"
-coding_variants <- grepl(coding_pattern, variants$INFO)
+# Logical vectors (TRUE/FALSE for each row)
+coding_variants <- grepl(coding, variants$INFO)
+
+# Counts for VAF > 0.05 in each category
+vaf_gt5 <- sum(vafs > 0.05, na.rm = TRUE)
 vaf_gt5_coding <- sum(vafs > 0.05 & coding_variants, na.rm = TRUE)
+
 vaf_gt5
 vaf_gt5_coding
 
+
 ```
+
+
 ```{r}
+coding_variants <- grepl(coding, variants$INFO)
+
+vaf_gt5 <- sum(vafs > 0.05, na.rm = TRUE)
+vaf_gt5_coding <- sum(vafs > 0.05 & coding_variants, na.rm = TRUE)
+
+vaf_gt5
+vaf_gt5_coding
+# 
 
 ```
 
