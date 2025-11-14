@@ -420,7 +420,7 @@ coding_variants <- grepl(coding, variants$INFO)
 
 vaf_gt5 <- sum(vafs > 0.05, na.rm = TRUE)
 vaf_gt5_coding <- sum(vafs > 0.05 & coding_variants, na.rm = TRUE)
-
+# 
 vaf_gt5
 vaf_gt5_coding
 # 
