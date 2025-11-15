@@ -517,7 +517,7 @@ Then, we will find the coding variants with VAF greater than 5%. We will first u
 colnames(ann_df)
 ```
 
-We will add a column with the VAF values of each variant, then use coding_keywords to filter for coding variant, then taking only those with VAF > 0.05
+We will add a column with the VAF values of each variant, then use coding_annots to filter for coding variant, then taking only those with VAF > 0.05
 
 ```{r}
 # Combine VAF and annotation dataframe
@@ -532,7 +532,7 @@ coding_vaf_above_5
 
 ## Contribution
 
-All group members did the assignment individually before discussing results. These versions can be seen on github repo: https://github.com/hnimoaht/BMEG310-Assignment-3-ver. There are some discrepencies in the version, particularly in the boxplot sections and finding coding variants with VAF above 0.05. Sarah Dumont's boxplot were used in this final draft. We debugged 5.10 together as a group and reaches a common result. Minh Duong ensures consistency in the final draft and compiles code. 
+All group members did the assignment individually before discussing results. These versions can be seen on github repo: https://github.com/hnimoaht/BMEG310-Assignment-3-ver. There are some discrepencies in these versions, particularly in the boxplot sections and finding coding variants with VAF above 0.05. Sarah Dumont's boxplot were used in this final draft. We debugged 5.10 together as a group and reaches a common result. Minh Duong ensures consistency in the final draft and compiles code. 
 
 
 
