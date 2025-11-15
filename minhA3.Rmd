@@ -214,8 +214,8 @@ boxplot(bq_list,
         las = 2,
         col = "skyblue",
         border = "navy",
-        main = "Base Quality Distribution",
-        xlab = "Chromosome",
+        main = "Base Quality Distribution Across All Reads",
+        xlab = "Read Positions",
         ylab = "Base Quality",
         outline = TRUE) 
 ```
