@@ -1,5 +1,5 @@
 ---
-title: "Assignment3"
+title: "Assignment 3"
 author: "Group15"
 date: "2025-11-06"
 output:
@@ -17,6 +17,10 @@ library(dplyr)
 library(ggplot2)
 
 ```
+
+## Sarah Dumont
+## Sophia Liau  
+## Minh Duong
 
 **Question 1**
 
@@ -187,16 +191,35 @@ cat(paste(mean_bq_x, collapse = ""), "\n")
 4.5. We want to plot the distribution of BQs across all bases and reads as a boxplot. We will first convert all QUAL fields to Phred scores
 
 ```{r}
-bq_all <- unlist(lapply(sam$v11, function(q) as.integer(charToRaw(q)) - 33))
+qual_list <- lapply(sam$v11, function(q) utf8ToInt(q) - 33)
+max_len <- max(sapply(qual_list, length))
+max_len
 
-# Plot distribution
-boxplot(bq_all,
-        main = "Distribution of Base Qualities (BQ) Across All Reads",
-        ylab = "Phred Quality Score",
-        col = "lightblue")
+# Pad all reads with NA so each read has equal length
+qual_mat <- t(sapply(qual_list, function(x) c(x, rep(NA, max_len - length(x)))))
+```
+We see that the maximum read length is 58, meaning the reads in the SAM/BAM file are only 58 bp long. Now we will create a list of Phred scores for each base position, for example: 
+
+bq_list[[1]] = qualities at position 1 across all reads
+
+```{r}
+bq_list <- lapply(1:max_len, function(i) qual_mat[, i])
+
+names(bq_list) <- paste0(1:max_len)
 ```
 
-The base quality distribution shows a high median Phred score of around 35, indicating great sequencing accuracy (>99.9%). Most bases fall within the Q30–Q37 range, with only a few low-quality outliers below Q20. This suggests that the dataset is of high overall quality, and downstream analyses can be performed with confidence.
+Now we can plot the distribution of basequality across all bases and reads
+```{r}
+boxplot(bq_list,
+        las = 2,
+        col = "skyblue",
+        border = "navy",
+        main = "Base Quality Distribution",
+        xlab = "Chromosome",
+        ylab = "Base Quality",
+        outline = TRUE) 
+```
+The base quality distribution shows a high median Phred score of around 35 to 36 for all positions, indicating great sequencing accuracy (>99.9%). Most bases fall within the Q30–Q37 range, with only a few low-quality outliers below Q25. This suggests that the dataset is of high overall quality, and downstream analyses can be performed with confidence.
 
 4.6. Section 1.4 of the SAM/BAM documentation indicates V4 as the leftmost mapping position of the reads
 
@@ -287,7 +310,7 @@ annotation_type
 
 This tells us that the mutation occur in the intron region (non-coding) of a gene.
 
-5.4. We can do the same process for varient 683
+5.4. We can do the same process for variant 683
 
 ```{r}
 # Extract the INFO field of variant 683
@@ -340,17 +363,17 @@ sum(table(ann_all))
 5.7. We can use grepl() on the INFO field to find those containing "intron_variant". Then we will compare it with the total number of variants.
 
 ```{r}
-intronic_variants <- variants[grepl("intron_variant", variants$INFO), ]
-n_intronic <- nrow(intronic_variants)
-n_intronic
+intronic_variants <- sum(grepl("intron", variants$INFO))
+intergenic_variants <- sum(grepl("intergenic", variants$INFO))
+total_in <- sum(intronic_variants,intergenic_variants)
 
 # Total number of variant calculation
 n_total <- nrow(variants)
-percentage_intronic <- (n_intronic / n_total) * 100
+percentage_intronic <- (total_in / n_total) * 100
 percentage_intronic
 ```
 
-We see that around 56.9% of variants are intronic which is consistent since most of the genomic DNA are non-coding.
+We see that around 83.37% of variants are intronic/intergenic which is consistent since most of the genomic DNA are non-coding.
 
 5.8. In the INFO header, we can see that the 3rd field of ANN outline the impact of a variant. We will repeat what we did in 5.5 but this time the function will return the first snpEff annotation for each variant.
 
@@ -381,21 +404,6 @@ ann_df <- data.frame(
 Coding variant will have specific keywords, we want only those variants. Then we can filter out the HIGH impact coding variant. Note that we also define splice variants as coding variants despite them being on an intron. This is because it affects how the exons is joined together which ultimately allows them to have the same impact as a coding variant.
 
 ```{r}
-coding_keywords <- c(
-  "missense_variant",
-  "synonymous_variant",
-  "stop_gained",
-  "stop_lost",
-  "start_lost",
-  "frameshift_variant",
-  "inframe_insertion",
-  "inframe_deletion",
-  "splice_acceptor_variant",
-  "splice_donor_variant",
-  "splice_region_variant",
-  "coding_sequence_variant"
-)
-
 coding_annots <- c(
   "missense",
   "stop",
@@ -409,14 +417,14 @@ coding_annots <- c(
 
 high_coding <- ann_df[
   grepl("HIGH", ann_df$Impact) &
-  grepl(paste(coding_keywords, collapse="|"), ann_df$Annotation),
+  grepl(paste(coding_annots, collapse="|"), ann_df$Annotation),
 ]
 
 unique(high_coding$Gene)
 table(high_coding$Impact)
 ```
 
-There are only 3 genes that have HIGH impact variant. Let's go one step further and see these protein's function:
+There are only 4 genes that have HIGH impact variant. Let's go one step further and see these protein's function, specifically those that are in the exon region:
 
 - Rps14: Encodes ribosomal protein S14, a component of the 40S ribosomal subunit.
 
@@ -424,7 +432,7 @@ There are only 3 genes that have HIGH impact variant. Let's go one step further 
 
 - Hnrnpl: Encodes heterogeneous nuclear ribonucleoprotein L, an RNA-binding protein that regulates pre-mRNA splicing and stability.
 
-We see that for only Rps19, a HIGH impact mutation can cause  Diamond-Blackfan anemia, affecting erythropoiesis (red-blood-cell formation), which makes sense considering the rarity of such mutation. 
+We see that a HIGH impact mutation on Rps19 can cause Diamond-Blackfan anemia, affecting erythropoiesis (red-blood-cell formation), so it makes sense for these kind of mutations to be so rare. 
 
 5.9. Insertions larger than the read length (60 bp) can’t be properly aligned or reconstructed, so Strelka cannot detect them reliably.
 
@@ -442,7 +450,8 @@ geno_field <- variants[, ncol(variants)]  # usually last column
 head(geno_field)
 ```
 
-We see that the allele depth has the same format as ADF and ADR field (x, y) but it always appear first. We will first split the entry at ":" and filter for any field that contains a comma, then take the first field with a comma. The VAF can then be calculated by taking:
+We will first write a function to calculate VAF which takes in the tag column and the field column. It will find the AD (allele depth) values then extract the REF and ALT read counts. The VAF can then be calculated by taking:
+
 \[\frac{x}{x+y}\]
 
 where $x$ is the ALT reads and $y$ is the REF read.
@@ -453,15 +462,15 @@ library(ggplot2)
 # Function to compute VAF
 get_vaf <- function(entry_fmt, entry_sample) {
 
-  # Split FORMAT and sample genotype fields
+  # Split tag colum and fields
   fmt_fields  <- unlist(strsplit(entry_fmt, ":"))
   samp_fields <- unlist(strsplit(entry_sample, ":"))
 
-  # Locate AD field by name (correct VCF spec)
+  # Locate AD field by name
   ad_idx <- which(fmt_fields == "AD")
   if (length(ad_idx) == 0) return(NA)
 
-  # Extract AD counts (e.g., "10,3")
+  # Extract AD counts
   ad_str  <- samp_fields[ad_idx]
   counts  <- as.numeric(unlist(strsplit(ad_str, ",")))
 
@@ -473,23 +482,29 @@ get_vaf <- function(entry_fmt, entry_sample) {
   total <- ref + alt
   if (total == 0) return(NA)
 
-  # VAF = ALT / (REF + ALT)
   alt / total
 }
 ```
 
-Next, we will apply the function get_vaf to every variants. Then we can plot the distribution of VAF.
+Next, we will apply the function get_vaf to every variants. 
 ```{r}
 # Apply to all variants
 tag_col <- variants[, ncol(variants)-1]    # FORMAT column
 geno_field <- variants[, ncol(variants)] 
 vafs <- mapply(get_vaf, tag_col, geno_field)
+```
 
-# Boxplot of VAF distribution
-boxplot(vafs,
-        main = "Distribution of Variant Allele Frequencies (VAF)",
-        ylab = "VAF",
-        col = "cornflowerblue")
+Now we will use the list of annotation type that was produced earlier. We will group VAFs by annotation type then plot the distribution of VAFs across all variant type.
+```{r}
+# Group VAFs by annotation type
+vaf_list <- split(vafs, ann_all)
+names(vaf_list) <- substr(names(vaf_list), 1, 6)
+
+# Plot
+par(mar = c(10, 4, 2, 2))
+boxplot(vaf_list, las=2, col="lightblue",
+        main="VAF per Variant", ylab="Variant Allele Frequency")
+
 ```
 Next, we need to find the variants that have VAF greater than 5%.
 ```{r}
@@ -515,7 +530,9 @@ coding_vaf_above_5 <- sum(coding_variants$VAF > 0.05, na.rm = TRUE)
 coding_vaf_above_5
 ```
 
+## Contribution
 
+All group members did the assignment individually before discussing results. These versions can be seen on github repo: https://github.com/hnimoaht/BMEG310-Assignment-3-ver. There are some discrepencies in the version, particularly in the boxplot sections and finding coding variants with VAF above 0.05. Sarah Dumont's boxplot were used in this final draft. We debugged 5.10 together as a group and reaches a common result. Minh Duong ensures consistency in the final draft and compiles code. 
 
 
 
